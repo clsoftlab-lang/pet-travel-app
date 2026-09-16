@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: Apache-2.0
+  Copyright 2026 CLSOFTLAB (씨엘소프트랩), Dr. Lee Il-guk (이일국)
+  윗마이펫 (With My Pet) — pet-friendly travel app (DEMO / static SPA)
+-->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="윗마이펫 — 반려동물 동반 가능한 숙소·식당·카페·공원·병원을 찾고, 여행 코스를 만들고, 후기를 나누는 펫 여행 앱 (데모).">
+  <title>윗마이펫 · With My Pet</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E%F0%9F%90%BE%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="topbar" class="topbar"></header>
+
+  <main id="app" class="app" role="main"></main>
+
+  <nav id="tabbar" class="tabbar" aria-label="주요 메뉴"></nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <noscript>
+    <p style="padding:1rem;text-align:center">이 앱은 JavaScript가 필요합니다. 브라우저에서 JavaScript를 켜주세요.</p>
+  </noscript>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
