@@ -19,20 +19,3 @@ jobs:
           node-version: "20"
       - name: Run static checks
         run: node check.mjs
-
-  pages:
-    needs: check
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: "."
-      - id: deployment
-        uses: actions/deploy-pages@v4
