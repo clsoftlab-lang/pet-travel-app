@@ -11,7 +11,12 @@
 //       server/ and stream the plain-text response back token-by-token.
 //
 //   tasks: "planner" (chatbot itinerary), "course" (auto trip course),
-//          "checklist" (pet-travel packing checklist).
+//          "checklist" (pet-travel packing checklist),
+//          "weekend" (on-load "이번 주말" auto recommendation).
+//
+// 무인(autonomous) resilience: in REAL mode, if the endpoint call fails, returns
+// a 429 {fallback:true} (cost cap hit), or the network errors, askAI AUTO-FALLS
+// BACK to the offline mock so the app never breaks — streaming still via onToken.
 //
 // The provider is chosen at call time, so switching to real Claude only requires
 // setting AI_ENDPOINT in ai/config.js — no other code changes. A real API key is
@@ -167,10 +172,27 @@ function mockChecklist(payload) {
   return lines.join("\n");
 }
 
+// A short, on-load "이번 주말" recommendation built from the app's own places.
+function mockWeekend(payload) {
+  const { region, size } = payload;
+  const itin = pickItinerary({ region, size, days: 1 });
+  const places = itin[0] ? itin[0].places : [];
+  if (!places.length) {
+    return "🐾 이번 주말 추천: 조건에 맞는 장소를 찾지 못했어요. 지역·크기 조건을 넓혀보세요.";
+  }
+  const lines = [line("🐾 이번 주말 반려동물 여행 추천 코스", region ? line(" · ", region) : "")];
+  places.forEach((p, i) => {
+    lines.push(line(String(i + 1), ". ", p.name, " (", p.category, ", ", p.region, " ", p.district, ")"));
+  });
+  lines.push("자세한 코스·준비물은 ‘AI 여행 도우미’에서 이어서 만들어보세요.");
+  return lines.join("\n");
+}
+
 function mockGenerate(task, payload) {
   switch (task) {
     case "course": return mockCourse(payload);
     case "checklist": return mockChecklist(payload);
+    case "weekend": return mockWeekend(payload);
     case "planner":
     default: return mockPlanner(payload);
   }
@@ -199,40 +221,52 @@ function groundingFor(task, payload) {
   return { places, gear };
 }
 
+// Offline mock, streamed via onToken. Also the 무인 auto-fallback path.
+async function runMock(task, payload, onToken) {
+  const text = mockGenerate(task, payload);
+  await streamOut(text, onToken);
+  return text;
+}
+
 /**
  * askAI — main entry. Returns the full response text; streams via onToken.
- * @param {"planner"|"course"|"checklist"} task
+ * @param {"planner"|"course"|"checklist"|"weekend"} task
  * @param {object} payload  e.g. { region, size, days, notes, question }
  * @param {{ onToken?: (chunk: string) => void }} [opts]
  * @returns {Promise<string>}
  */
 export async function askAI(task, payload = {}, { onToken } = {}) {
   // DEMO mode: deterministic offline mock.
-  if (!AI_ENDPOINT) {
-    const text = mockGenerate(task, payload);
-    await streamOut(text, onToken);
-    return text;
-  }
+  if (!AI_ENDPOINT) return runMock(task, payload, onToken);
 
   // REAL mode: stream from the backend proxy (which holds the API key).
-  const body = { task, payload: { ...payload, grounding: groundingFor(task, payload) } };
-  const res = await fetch(AI_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok || !res.body) {
-    throw new Error("AI 요청이 실패했어요 (" + res.status + ")");
+  // 무인 resilience: any failure (network error, non-OK, or a 429 {fallback:true}
+  // cost-cap response) transparently falls back to the offline mock.
+  try {
+    const body = { task, payload: { ...payload, grounding: groundingFor(task, payload) } };
+    const res = await fetch(AI_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    // Cost cap / rate limit → { fallback: true } → use the mock.
+    if (res.status === 429) return runMock(task, payload, onToken);
+    if (!res.ok || !res.body) throw new Error("AI 요청이 실패했어요 (" + res.status + ")");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let full = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      full += chunk;
+      if (onToken) onToken(chunk);
+    }
+    return full;
+  } catch (err) {
+    // Never break the app: fall back to the offline mock.
+    console.warn("[askAI] endpoint failed — falling back to offline mock:", err && err.message ? err.message : err);
+    return runMock(task, payload, onToken);
   }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let full = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    const chunk = decoder.decode(value, { stream: true });
-    full += chunk;
-    if (onToken) onToken(chunk);
-  }
-  return full;
 }

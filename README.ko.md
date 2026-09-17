@@ -49,13 +49,24 @@
 **실제 Claude 연동 방법:**
 
 1. `cd server && npm install`
-2. `cp .env.example .env` 후 **`ANTHROPIC_API_KEY`** 설정 (모델 `claude-opus-5`)
+2. `cp .env.example .env` 후 **`ANTHROPIC_API_KEY`** 설정 (비용 우선 기본 모델 `claude-haiku-4-5`, `AI_MODEL` 로 변경 가능)
 3. `npm start` (기본 `http://localhost:8787`)
 4. `ai/config.js`의 **`AI_ENDPOINT`** 를 `"http://localhost:8787/api/ai"` 로 설정
 
-이후 브라우저는 `POST /api/ai` 에서 응답을 스트리밍 받으며, 서버는 `client.messages.stream({ model: "claude-opus-5", ... })` 를 호출합니다.
+이후 브라우저는 `POST /api/ai` 에서 응답을 스트리밍 받으며, 서버는 `client.messages.stream({ model: process.env.AI_MODEL || "claude-haiku-4-5", ... })` 를 호출합니다.
 
 > **🔒 API 키는 서버에만 보관합니다. `ANTHROPIC_API_KEY` 는 브라우저나 저장소에 절대 노출되지 않으며, 서버 환경변수로만 존재하고, 배포되는 `AI_ENDPOINT` 는 비어 있습니다.** 자세한 내용은 [`server/README.md`](server/README.md) 참고.
+
+## ⚙️ 고도화 — 무인·저비용 실 AI 연동
+
+이번 빌드는 기존 기능을 모두 유지하면서 AI 레이어를 **무인(autonomous) · 실제 AI 연결(real Claude) · 비용 합리적(cost-efficient)** 방향으로 고도화했습니다.
+
+- **비용 모델** — 비용 우선 기본 모델 **`claude-haiku-4-5`**(약 **$1 / $5 per MTok** 입력/출력), `AI_MODEL` 로 변경 가능(`claude-sonnet-5` / `claude-opus-5` 로 상향). **프롬프트 캐싱**으로 안정적인 태스크별 시스템 프롬프트를 `cache_control:{type:'ephemeral'}` 블록으로 전송하고, 태스크별 `max_tokens`(~700)로 출력을 제한하며, **월 토큰 상한**(`AI_MONTHLY_TOKEN_CAP`, 기본 200만)과 IP별 속도 제한(20/분)을 둡니다. Haiku 는 `thinking`/effort 를 보내지 않고, sonnet/opus 는 `thinking:{type:'adaptive'}` + `output_config:{effort}` 를 보냅니다.
+- **대략적 비용** — 일반적인 근거 기반 요청은 입력 ~2~4K + 출력 ~0.5~1K 토큰으로, Haiku 요금 기준 **1,000요청당 약 $5~10 수준**(캐시 적중 시 더 저렴)이며 opus 대비 수 배 저렴합니다.
+- **무료 원클릭 배포** — **Cloudflare Workers** 변형(`server/worker.js` + `server/wrangler.toml`)이 동일 규칙으로 Anthropic REST API 를 호출합니다. 무료 티어에 한 번 배포하면(`npx wrangler deploy` + `wrangler secret put ANTHROPIC_API_KEY`) 관리할 서버가 없습니다(무인).
+- **무인·안 끊김** — 홈 화면이 로드 시 `askAI` 로 **“이번 주말 반려동물 여행 추천 코스”** 를 자동 생성하고, 엔드포인트 실패 / `429 {fallback:true}` / 네트워크 오류 시 **자동으로 오프라인 목업으로 폴백**하여 앱이 무인으로도 끊기지 않습니다.
+
+> **🔒 API 키는 서버에만 보관합니다 — 브라우저나 저장소에는 절대 넣지 않습니다.**
 
 ## 로컬 실행
 

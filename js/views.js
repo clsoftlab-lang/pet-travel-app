@@ -85,6 +85,14 @@ export function renderHome(root) {
       <span>→</span>
     </section>
 
+    <section class="panel weekend-pick" aria-label="이번 주말 AI 추천 코스">
+      <div class="row-head">
+        <h2>${icon("spark")} 이번 주말 AI 추천 코스</h2>
+        <button class="linklike" data-goto="/ai">더 만들기 →</button>
+      </div>
+      <pre class="ai-out" id="weekend-out" aria-live="polite">추천 코스를 준비하고 있어요… 🐾</pre>
+    </section>
+
     <section class="row-head">
       <h2>평점 높은 인기 장소</h2>
       <button class="linklike" data-goto="/places">전체 보기 →</button>
@@ -98,6 +106,21 @@ export function renderHome(root) {
   `;
   root.querySelectorAll("[data-cat]").forEach((b) =>
     b.addEventListener("click", () => { filters.category = b.dataset.cat; go("/places"); }));
+
+  // Autonomous (무인) on-load feature: auto-generate "이번 주말" recommendation via
+  // askAI. Works offline through the mock; failures fall back silently — the rest
+  // of the home screen is already rendered and unaffected.
+  const weekendOut = qs("#weekend-out", root);
+  if (weekendOut) {
+    const top = featured[0];
+    const payload = { region: top ? top.region : "", days: 2 };
+    weekendOut.textContent = "";
+    askAI("weekend", payload, {
+      onToken: (t) => { weekendOut.textContent += t; },
+    }).catch(() => {
+      if (!weekendOut.textContent) weekendOut.textContent = "지금은 추천을 불러올 수 없어요. ‘AI 여행 도우미’에서 직접 만들어보세요.";
+    });
+  }
 }
 
 function iconForCat(key) {

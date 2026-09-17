@@ -49,13 +49,24 @@ The app ships with a **pluggable AI layer** and three features, wired into the *
 **To enable real Claude:**
 
 1. `cd server && npm install`
-2. `cp .env.example .env` and set **`ANTHROPIC_API_KEY`** (model `claude-opus-5`)
+2. `cp .env.example .env` and set **`ANTHROPIC_API_KEY`** (cost-first default model `claude-haiku-4-5`, configurable via `AI_MODEL`)
 3. `npm start` (defaults to `http://localhost:8787`)
 4. set **`AI_ENDPOINT`** in `ai/config.js` to `"http://localhost:8787/api/ai"`
 
-The browser then streams responses from `POST /api/ai`, which calls `client.messages.stream({ model: "claude-opus-5", ... })`.
+The browser then streams responses from `POST /api/ai`, which calls `client.messages.stream({ model: process.env.AI_MODEL || "claude-haiku-4-5", ... })`.
 
 > **🔒 API keys are server-side only. The `ANTHROPIC_API_KEY` never appears in the browser or the repo — it lives only as a server environment variable, and the shipped `AI_ENDPOINT` is empty.** See [`server/README.md`](server/README.md).
+
+## ⚙️ 고도화 — 무인·저비용 실 AI 연동
+
+This build upgrades the AI layer for **무인(autonomous) · 실제 AI 연결(real Claude) · 비용 합리적(cost-efficient)** operation, while keeping every prior feature working:
+
+- **Cost model** — cost-first default **`claude-haiku-4-5`** (~**$1 / $5 per MTok** in/out), configurable via `AI_MODEL` (raise to `claude-sonnet-5` / `claude-opus-5`). **Prompt caching** sends the stable per-task system prompt as a `cache_control:{type:'ephemeral'}` block; modest per-task `max_tokens` (~700); a **monthly token cap** (`AI_MONTHLY_TOKEN_CAP`, default 2,000,000) plus a per-IP rate limit (20/min). Haiku sends no `thinking`/effort; sonnet/opus send `thinking:{type:'adaptive'}` + `output_config:{effort}`.
+- **Rough cost estimate** — a typical grounded request here is ~2–4K input + ~0.5–1K output tokens; at Haiku pricing that is on the order of **~$5–10 per 1,000 requests** (less with cache hits), versus multiples of that on opus.
+- **Free one-deploy hosting** — a **Cloudflare Workers** variant (`server/worker.js` + `server/wrangler.toml`) calls the Anthropic REST API with the same rules. Deploy once on the free tier (`npx wrangler deploy` + `wrangler secret put ANTHROPIC_API_KEY`) — no server to babysit.
+- **Autonomous & never-breaks** — the home screen auto-generates an **“이번 주말 반려동물 여행 추천 코스”** on load via `askAI`, and any endpoint failure / `429 {fallback:true}` / network error **auto-falls back to the offline mock**, so the app keeps working unmanned.
+
+> **🔒 API keys are server-side only — never in the browser or repo.**
 
 ## Run locally
 
@@ -81,8 +92,8 @@ npx serve .
 index.html          app.js (router/bootstrap)     styles.css
 js/  data.js storage.js state.js svg.js ui.js views.js
 data/  places.json gear.json meta.json
-ai/  config.js ai.js          (pluggable AI layer — mock or proxy)
-server/  index.mjs package.json .env.example README.md  (optional Claude proxy)
+ai/  config.js ai.js          (pluggable AI layer — mock or proxy, auto-fallback)
+server/  index.mjs worker.js wrangler.toml package.json .env.example README.md  (Node + Cloudflare Workers proxy)
 check.mjs           .github/workflows/ci.yml
 ```
 
