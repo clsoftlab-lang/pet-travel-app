@@ -1,0 +1,18 @@
+{
+  "name": "pet-travel-app-ai-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Optional backend proxy that connects the 윗마이펫 (With My Pet) AI layer to the real Claude API. Keeps ANTHROPIC_API_KEY server-side only.",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0"
+  },
+  "license": "Apache-2.0"
+}

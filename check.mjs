@@ -78,6 +78,49 @@ try {
   bad("index.html not readable: " + e.message);
 }
 
+// 5) AI layer gates (ai/ + server/)
+console.log("\n[5] AI layer (ai/ + server/)");
+const aiDirs = ["ai", "server"].map((d) => join(ROOT, d));
+for (const dir of aiDirs) {
+  let present = false;
+  try { present = statSync(dir).isDirectory(); } catch { present = false; }
+  present ? ok(`${rel(dir)}/ exists`) : bad(`${rel(dir)}/ missing`);
+}
+// node --check every .js/.mjs under ai/ and server/
+const aiFiles = files.filter((f) => {
+  const r = rel(f);
+  return (r.startsWith("ai/") || r.startsWith("server/")) && [".js", ".mjs"].includes(extname(f));
+});
+if (!aiFiles.length) bad("no AI-layer JS files found under ai/ or server/");
+for (const f of aiFiles) {
+  try {
+    execFileSync(process.execPath, ["--check", f], { stdio: "pipe" });
+    ok(`node --check ${rel(f)}`);
+  } catch (e) {
+    bad(`${rel(f)} — ${String(e.stderr || e.message).trim()}`);
+  }
+}
+// AI_ENDPOINT must ship empty (no live endpoint / no key required for the demo)
+try {
+  const cfg = readFileSync(join(ROOT, "ai/config.js"), "utf8");
+  /export\s+const\s+AI_ENDPOINT\s*=\s*(""|'')\s*;/.test(cfg)
+    ? ok("ai/config.js AI_ENDPOINT is empty")
+    : bad("ai/config.js AI_ENDPOINT must be an empty string in the shipped demo");
+} catch (e) {
+  bad("ai/config.js not readable: " + e.message);
+}
+// No real Anthropic API key committed anywhere (pattern split so this file never self-matches)
+console.log("\n[6] No real API key committed");
+const keyRe = new RegExp("sk-" + "ant-[A-Za-z0-9_-]{20,}");
+let leaks = 0;
+for (const f of files) {
+  if ([".png", ".jpg", ".jpeg", ".gif", ".ico", ".woff", ".woff2"].includes(extname(f))) continue;
+  let text = "";
+  try { text = readFileSync(f, "utf8"); } catch { continue; }
+  if (keyRe.test(text)) { bad(`possible API key in ${rel(f)}`); leaks++; }
+}
+if (!leaks) ok("no sk-ant-* key format found in tracked files");
+
 function rel(f) {
   return f.replace(/\\/g, "/").replace(ROOT.replace(/\\/g, "/"), "").replace(/^\//, "");
 }

@@ -1,6 +1,10 @@
 # Dependencies
 node_modules/
 
+# Secrets — never commit real keys (only server/.env.example is tracked)
+.env
+server/.env
+
 # Logs
 *.log
 npm-debug.log*

@@ -36,6 +36,27 @@
 - **실제 계정·결제·개인정보(PII) 수집·실제 지도 서비스가 없습니다.** "모의 결제"는 실제 청구가 없습니다.
 - **실제 서비스라면** 백엔드+실 DB, 실제 지도/위치, 인증, 실제 결제, 콘텐츠 검수가 추가됩니다.
 
+## 🤖 AI 기능 (API 연동)
+
+앱에는 **플러그인형 AI 레이어**와 세 가지 기능이 포함되어 있으며, **AI 여행 도우미** 화면(`#/ai`, 상단바 ✨ 아이콘)에 연결되어 있습니다.
+
+1. **AI 반려동물 여행 플래너 챗봇** — 지역·반려동물 크기·일수를 고르고 물어보면, 앱의 장소 데이터로 동반 가능한 일정을 제안합니다.
+2. **여행 코스 자동 생성** — 일차별 코스를 자동으로 만들어 *내 여행 코스*에 바로 저장합니다.
+3. **동반 준비물 체크리스트 생성** — 여행 조건(계절·크기·메모)과 추천 용품에 맞춘 준비물 체크리스트를 만듭니다.
+
+**데모에서는 AI가 실제 API 없이 오프라인 한국어 목업(MockProvider)** 으로 동작하며, `data/*.json` 데이터를 재사용합니다. 키·네트워크 없이 GitHub Pages에서 그대로 작동합니다.
+
+**실제 Claude 연동 방법:**
+
+1. `cd server && npm install`
+2. `cp .env.example .env` 후 **`ANTHROPIC_API_KEY`** 설정 (모델 `claude-opus-5`)
+3. `npm start` (기본 `http://localhost:8787`)
+4. `ai/config.js`의 **`AI_ENDPOINT`** 를 `"http://localhost:8787/api/ai"` 로 설정
+
+이후 브라우저는 `POST /api/ai` 에서 응답을 스트리밍 받으며, 서버는 `client.messages.stream({ model: "claude-opus-5", ... })` 를 호출합니다.
+
+> **🔒 API 키는 서버에만 보관합니다. `ANTHROPIC_API_KEY` 는 브라우저나 저장소에 절대 노출되지 않으며, 서버 환경변수로만 존재하고, 배포되는 `AI_ENDPOINT` 는 비어 있습니다.** 자세한 내용은 [`server/README.md`](server/README.md) 참고.
+
 ## 로컬 실행
 
 빌드·의존성이 없습니다. ES 모듈 특성상 HTTP로 서빙해야 합니다:
@@ -58,7 +79,7 @@ npx serve .
 
 ## CI
 
-`node check.mjs` 가 다음을 검증합니다: `data/*.json` 파싱, 시드 개수(장소 ≥40, 용품 ≥20), 모든 JS의 `node --check`, `index.html`의 필수 컨테이너 존재. GitHub Actions(`.github/workflows/ci.yml`)에서 실행됩니다.
+`node check.mjs` 가 다음을 검증합니다: `data/*.json` 파싱, 시드 개수(장소 ≥40, 용품 ≥20), 모든 JS(`ai/`·`server/` 포함)의 `node --check`, `index.html`의 필수 컨테이너 존재, `ai/config.js`의 `AI_ENDPOINT` 가 비어 있는지, 실제 `sk-ant-*` 키가 커밋되지 않았는지. GitHub Actions(`.github/workflows/ci.yml`)에서 실행됩니다.
 
 ## 기여자
 

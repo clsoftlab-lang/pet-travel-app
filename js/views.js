@@ -11,6 +11,7 @@ import {
 } from "./state.js";
 import { placeImage, gearImage, petAvatar, icon, escapeText, escapeAttr } from "./svg.js";
 import { h, won, stars, toast, modal, closeModal, qs, qsa } from "./ui.js";
+import { askAI, pickItinerary } from "../ai/ai.js";
 
 export function go(path) { location.hash = "#" + path; }
 
@@ -77,6 +78,11 @@ export function renderHome(root) {
           <span class="cat-ic">${icon(iconForCat(c.key))}</span>
           <span>${escapeText(c.key)}</span>
         </button>`).join("")}
+    </section>
+
+    <section class="cta-banner ai-banner" data-goto="/ai">
+      <div>${icon("spark")}<strong>AI 여행 도우미</strong> 지역·크기·일수만 고르면 코스·준비물까지 AI가 제안해요.</div>
+      <span>→</span>
     </section>
 
     <section class="row-head">
@@ -724,6 +730,146 @@ export function renderChecklist(root) {
         </li>`).join("")}
     </ul>`;
   qsa("[data-check]").forEach((li) => li.addEventListener("click", () => { toggleCheck(li.dataset.check); renderChecklist(root); }));
+}
+
+// ---------- AI 여행 도우미 (플래너 챗봇 · 코스 자동생성 · 준비물 체크리스트) ----------
+export function renderAI(root) {
+  const meta = state.meta;
+  const regionOpts = `<option value="">지역 무관</option>` +
+    (meta.regions || []).map((r) => `<option value="${escapeAttr(r.key)}">${escapeText(r.key)}</option>`).join("");
+  const sizeOpts = `<option value="">크기 무관</option>` +
+    (meta.petSizes || []).map((s) => `<option value="${s.key}">${escapeText(s.label)}</option>`).join("");
+
+  root.innerHTML = `
+    <div class="page-head">
+      <h1>${icon("spark")} AI 여행 도우미</h1>
+      <p class="muted">반려동물 동반 여행을 AI가 도와드려요 <span class="chip">데모 = 목업</span></p>
+    </div>
+    <div class="ai-ctx">
+      <select id="ai-region" aria-label="지역">${regionOpts}</select>
+      <select id="ai-size" aria-label="반려동물 크기">${sizeOpts}</select>
+      <label class="ai-days">여행일수
+        <input id="ai-days" type="number" min="1" max="7" value="2" aria-label="여행 일수">일</label>
+    </div>
+    <div class="chips-row ai-tabs" role="tablist">
+      <button class="chip-btn on" data-aitab="planner" role="tab">💬 플래너 챗봇</button>
+      <button class="chip-btn" data-aitab="course" role="tab">🗺️ 코스 자동생성</button>
+      <button class="chip-btn" data-aitab="checklist" role="tab">✅ 준비물 체크리스트</button>
+    </div>
+    <div id="ai-panel"></div>
+    <p class="muted small ai-note">* 데모에서는 실제 API 없이 앱의 장소·용품 데이터로 결과를 생성합니다.
+      실제 Claude 연동은 <code>server/</code> 프록시와 <code>ANTHROPIC_API_KEY</code>로 활성화되며, 키는 서버에만 보관됩니다.</p>
+  `;
+
+  const ctx = () => ({
+    region: qs("#ai-region").value,
+    size: qs("#ai-size").value,
+    days: Number(qs("#ai-days").value) || 2,
+  });
+
+  const panel = qs("#ai-panel");
+  let tab = "planner";
+  const paint = () => {
+    if (tab === "course") panel.innerHTML = aiCoursePanel();
+    else if (tab === "checklist") panel.innerHTML = aiChecklistPanel();
+    else panel.innerHTML = aiPlannerPanel();
+    bindAiPanel(tab, panel, ctx);
+  };
+  qsa("[data-aitab]").forEach((b) => b.addEventListener("click", () => {
+    tab = b.dataset.aitab;
+    qsa("[data-aitab]").forEach((x) => x.classList.toggle("on", x === b));
+    paint();
+  }));
+  paint();
+}
+
+function aiPlannerPanel() {
+  return `
+    <div class="ai-chat" id="ai-chat">
+      <div class="ai-msg ai">${icon("spark")} 안녕하세요! 지역·크기·일수를 고른 뒤, 궁금한 점을 물어보세요.
+        예) "바다 근처로 2박 코스 추천해줘"</div>
+    </div>
+    <form class="ai-form" id="ai-plan-form">
+      <input id="ai-q" placeholder="반려동물 여행에 대해 물어보세요" aria-label="질문" autocomplete="off">
+      <button class="btn primary" type="submit">${icon("spark")} 보내기</button>
+    </form>`;
+}
+
+function aiCoursePanel() {
+  return `
+    <div class="ai-actions">
+      <button class="btn primary" id="ai-gen-course">${icon("route")} 코스 자동 생성</button>
+      <button class="btn ghost" id="ai-save-course" style="display:none">${icon("plus")} 이 코스 저장</button>
+    </div>
+    <pre class="ai-out" id="ai-course-out" aria-live="polite"></pre>`;
+}
+
+function aiChecklistPanel() {
+  return `
+    <label class="ai-notes">여행 메모 (선택)
+      <input id="ai-notes" placeholder="예: 여름, 바다, 장거리 이동" aria-label="여행 메모" autocomplete="off"></label>
+    <div class="ai-actions">
+      <button class="btn primary" id="ai-gen-check">${icon("check")} 체크리스트 생성</button>
+    </div>
+    <pre class="ai-out" id="ai-check-out" aria-live="polite"></pre>`;
+}
+
+async function streamInto(task, payload, outEl, btns = []) {
+  outEl.textContent = "";
+  outEl.classList.add("streaming");
+  btns.forEach((b) => b && (b.disabled = true));
+  try {
+    await askAI(task, payload, { onToken: (t) => { outEl.textContent += t; outEl.scrollTop = outEl.scrollHeight; } });
+  } catch (e) {
+    outEl.textContent = "AI 응답 중 문제가 발생했어요: " + (e && e.message ? e.message : e);
+  } finally {
+    outEl.classList.remove("streaming");
+    btns.forEach((b) => b && (b.disabled = false));
+  }
+}
+
+function bindAiPanel(tab, panel, ctx) {
+  if (tab === "planner") {
+    const form = qs("#ai-plan-form", panel);
+    const log = qs("#ai-chat", panel);
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = qs("#ai-q", panel).value.trim();
+      if (!q) return;
+      qs("#ai-q", panel).value = "";
+      log.appendChild(h(`<div class="ai-msg user">${escapeText(q)}</div>`));
+      const bubble = h(`<div class="ai-msg ai"></div>`);
+      log.appendChild(bubble);
+      log.scrollTop = log.scrollHeight;
+      await streamInto("planner", { ...ctx(), question: q }, bubble, [form.querySelector("button")]);
+      log.scrollTop = log.scrollHeight;
+    });
+  } else if (tab === "course") {
+    const gen = qs("#ai-gen-course", panel);
+    const save = qs("#ai-save-course", panel);
+    const out = qs("#ai-course-out", panel);
+    gen.addEventListener("click", async () => {
+      save.style.display = "none";
+      await streamInto("course", ctx(), out, [gen]);
+      if (pickItinerary(ctx()).some((d) => d.places.length)) save.style.display = "";
+    });
+    save.addEventListener("click", () => {
+      const c = ctx();
+      const ids = pickItinerary(c).flatMap((d) => d.places.map((p) => p.id));
+      if (!ids.length) { toast("담을 장소가 없어요", "warn"); return; }
+      const t = createTrip((c.region || "AI 추천") + " AI 코스");
+      ids.forEach((id) => addPlaceToTrip(t.id, id));
+      toast("AI 코스를 저장했어요! 🐾");
+      go("/trips/" + t.id);
+    });
+  } else {
+    const gen = qs("#ai-gen-check", panel);
+    const out = qs("#ai-check-out", panel);
+    gen.addEventListener("click", async () => {
+      const notes = qs("#ai-notes", panel).value.trim();
+      await streamInto("checklist", { ...ctx(), notes }, out, [gen]);
+    });
+  }
 }
 
 // ---------- helpers ----------

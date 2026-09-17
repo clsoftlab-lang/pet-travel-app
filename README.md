@@ -36,6 +36,27 @@ This is a demonstration front-end. In **BOLD**:
 - **There are no real accounts, no payments, no PII collection, and no real map service.** "Mock checkout" charges nothing.
 - **A production build would add** a backend + real database, real maps/geolocation, authentication, real payments, and content moderation.
 
+## 🤖 AI 기능 (API 연동)
+
+The app ships with a **pluggable AI layer** and three features, wired into the **AI 여행 도우미** screen (`#/ai`, ✨ icon in the top bar):
+
+1. **AI 반려동물 여행 플래너 챗봇** — pick region / pet size / dates, then ask for a pet-friendly itinerary built from the app's own places.
+2. **여행 코스 자동 생성** — auto-build a day-by-day trip course and save it straight into *내 여행 코스*.
+3. **동반 준비물 체크리스트 생성** — generate a packing checklist tuned to the trip (season, size, notes) and recommended gear.
+
+**In the demo, AI runs on a deterministic offline Korean MockProvider** that reuses `data/*.json` — no network, no key, works on GitHub Pages.
+
+**To enable real Claude:**
+
+1. `cd server && npm install`
+2. `cp .env.example .env` and set **`ANTHROPIC_API_KEY`** (model `claude-opus-5`)
+3. `npm start` (defaults to `http://localhost:8787`)
+4. set **`AI_ENDPOINT`** in `ai/config.js` to `"http://localhost:8787/api/ai"`
+
+The browser then streams responses from `POST /api/ai`, which calls `client.messages.stream({ model: "claude-opus-5", ... })`.
+
+> **🔒 API keys are server-side only. The `ANTHROPIC_API_KEY` never appears in the browser or the repo — it lives only as a server environment variable, and the shipped `AI_ENDPOINT` is empty.** See [`server/README.md`](server/README.md).
+
 ## Run locally
 
 No build, no dependencies. Serve the folder over HTTP (ES modules require it):
@@ -60,12 +81,14 @@ npx serve .
 index.html          app.js (router/bootstrap)     styles.css
 js/  data.js storage.js state.js svg.js ui.js views.js
 data/  places.json gear.json meta.json
+ai/  config.js ai.js          (pluggable AI layer — mock or proxy)
+server/  index.mjs package.json .env.example README.md  (optional Claude proxy)
 check.mjs           .github/workflows/ci.yml
 ```
 
 ## CI
 
-`node check.mjs` verifies: every `data/*.json` parses, seed counts (≥40 places, ≥20 gear), `node --check` for all JS modules, and that `index.html` has the required containers. Runs on GitHub Actions (`.github/workflows/ci.yml`).
+`node check.mjs` verifies: every `data/*.json` parses, seed counts (≥40 places, ≥20 gear), `node --check` for all JS modules (including `ai/` and `server/`), that `index.html` has the required containers, that `ai/config.js`'s `AI_ENDPOINT` ships empty, and that no real `sk-ant-*` key is committed. Runs on GitHub Actions (`.github/workflows/ci.yml`).
 
 ## Contributors
 

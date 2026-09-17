@@ -111,6 +111,7 @@ const ICONS = {
   trash: "M6 7 H18 M9 7 V5 H15 V7 M8 7 V20 H16 V7",
   close: "M6 6 L18 18 M18 6 L6 18",
   phone: "M5 4 H9 L11 9 L8 11 C9 14 10 15 13 16 L15 13 L20 15 V19 C20 20 19 20 18 20 C10 20 4 14 4 6 C4 5 4 4 5 4 Z",
+  spark: "M12 3 L13.6 9.2 L20 11 L13.6 12.8 L12 19 L10.4 12.8 L4 11 L10.4 9.2 Z M18 4 L18.8 6.2 L21 7 L18.8 7.8 L18 10 L17.2 7.8 L15 7 L17.2 6.2 Z",
 };
 
 export function icon(name, cls = "") {

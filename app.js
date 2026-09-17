@@ -9,7 +9,7 @@ import { icon } from "./js/svg.js";
 import { toast } from "./js/ui.js";
 import {
   go, renderHome, renderPlaces, renderPlaceDetail, renderMap, renderCommunity,
-  renderTrips, renderGear, renderProfile, renderEmergency, renderChecklist,
+  renderTrips, renderGear, renderProfile, renderEmergency, renderChecklist, renderAI,
 } from "./js/views.js";
 
 const app = document.getElementById("app");
@@ -58,6 +58,7 @@ function route() {
       case "profile": renderProfile(app); break;
       case "emergency": renderEmergency(app); break;
       case "checklist": renderChecklist(app); break;
+      case "ai": renderAI(app); break;
       default: renderHome(app);
     }
   } catch (e) {
@@ -83,6 +84,7 @@ function buildChrome() {
   topbar.innerHTML = `
     <button class="brand" data-goto="/">${icon("paw")}<span>윗마이펫</span></button>
     <div class="top-actions">
+      <button class="icon-btn" data-goto="/ai" aria-label="AI 여행 도우미">${icon("spark")}</button>
       <button class="icon-btn" data-goto="/emergency" aria-label="응급 병원">${icon("cross")}</button>
       <button class="icon-btn" data-goto="/community" aria-label="커뮤니티">${icon("paw")}</button>
       <button class="icon-btn" data-goto="/checklist" aria-label="체크리스트">${icon("check")}</button>
